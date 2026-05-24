@@ -1,0 +1,6 @@
+TxnDate,VoucherID,DrAmount,CrAmount,Narration,LedgerName
+2025-04-01,OB-01,0.00,0.00,Opening Bal,Surya Agencies
+2025-04-05,VCH-10,12000.00,0.00,Sales Bill 10,Surya Agencies
+2025-04-08,VCH-11,0.00,12000.00,Chq recd HDFC,Surya Agencies
+2025-04-12,JV-01,5000.00,0.00,Adjustment entry,Surya Agencies
+2025-04-12,JV-02,0.00,5000.00,Adjustment reversal,Surya Agencies

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+venv/
+.env
+*.env
+
+# SQLite database
+forensic_audit.db
+
+# Uploaded files
+uploads/
+
+# Node.js
+node_modules/
+frontend/dist/
+
+# PyInstaller
+*.spec
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+.env
+forensic_audit_config.json
