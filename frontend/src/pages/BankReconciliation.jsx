@@ -343,6 +343,26 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
       {/* SUBTAB 1: STATEMENT CATEGORIZATION */}
       {subTab === 'categorization' && activeData && (
         <div className="space-y-6">
+          {/* Quick Guide Card */}
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 flex gap-4 text-sm text-gray-300">
+            <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl h-fit">
+              <Info className="w-5.5 h-5.5" />
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-white text-base">Quick Guide: Bank Statement Analysis</h4>
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Independent Workspace</span>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                This workspace operates independently of the General Ledger audit. Use the search bar to locate specific transaction narrations, or filter by category and type (Debits/Credits).
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
+                <li><strong>Dynamic Calculations:</strong> The KPI cards and the bottom **TOTALS** row update in real time to reflect the active filters.</li>
+                <li><strong>Filtered Download:</strong> Clicking **Download Categorized CSV** exports only your filtered results and appends matching totals at the bottom.</li>
+              </ul>
+            </div>
+          </div>
+
           {/* KPI Dashboard */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-dark-800 border border-dark-700 rounded-2xl p-4.5 flex items-center justify-between">

@@ -219,6 +219,27 @@ export default function CreditorsLedger({ results }) {
         </div>
       </div>
 
+      {/* Quick Guide Card */}
+      <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-5 flex gap-4 text-sm text-gray-300">
+        <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl h-fit">
+          <Info className="w-5.5 h-5.5" />
+        </div>
+        <div className="space-y-1.5 flex-1">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-white text-base">Quick Guide: Creditors (AP) Ledger Audit</h4>
+            <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Independent Workspace</span>
+          </div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            This workspace processes Accounts Payable data independently. Once you upload a creditors ledger dump:
+          </p>
+          <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
+            <li><strong>FIFO Settlement:</strong> Payments are matched to purchase invoices chronologically to compute true aging.</li>
+            <li><strong>Outstanding Buckets:</strong> Balances are bucketed across standard intervals to track potential overdue liability.</li>
+            <li><strong>Risk Flags:</strong> Identifies vendors with zero payment runs or carried forward opening balances requiring investigation.</li>
+          </ul>
+        </div>
+      </div>
+
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-dark-800 border border-purple-500/20 rounded-xl p-4">

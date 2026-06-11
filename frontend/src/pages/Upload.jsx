@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Users } from 'lucide-react';
+import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Users, Info } from 'lucide-react';
 
 // Creditors ledger has its own dedicated upload zone — NOT in this generic list
 const LEDGER_TYPES = [
@@ -241,13 +241,32 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Title */}
-      <div className="mb-10 text-center">
+      <div className="mb-8 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-300">
           GL Forensic Audit Ledger Suite
         </h1>
         <p className="text-gray-400 max-w-2xl mx-auto">
           Upload any General Ledger dump (Tally, SAP, Busy, Marg, CSV) to detect duplicate payments, anomalies, aging, and reconciliation discrepancies locally.
         </p>
+      </div>
+
+      {/* Quick Guide Card */}
+      <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 mb-8 flex gap-4 text-sm text-gray-300 max-w-4xl mx-auto">
+        <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl h-fit">
+          <Info className="w-5.5 h-5.5" />
+        </div>
+        <div className="space-y-1.5 flex-1 text-left">
+          <h4 className="font-bold text-white text-base">Quick Start Guide</h4>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Follow these steps to perform a General Ledger Forensic Audit:
+          </p>
+          <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
+            <li><strong>Step 1: Set parameters:</strong> Adjust the As-on Date, base currency, and your duplicate transaction lookup window.</li>
+            <li><strong>Step 2: Ingest Main GL:</strong> Drag & drop your primary general ledger file into the drag zone.</li>
+            <li><strong>Step 3: Attach supporting data (Recommended):</strong> Attach Creditors or Sales sheets to unlock sub-suite reviews, then click <strong>Start Forensic Audit</strong>.</li>
+            <li><strong>Note:</strong> You can use the **Creditors Ledger** and **Bank Statement** workspaces in the sidebar directly at any time without uploading a General Ledger.</li>
+          </ul>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

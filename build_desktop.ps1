@@ -1,5 +1,8 @@
 # Script to build and package Ledger Forensic Audit application as a single Windows executable.
 
+# Terminate any running instances of the app to release file handles
+taskkill /f /im LedgerForensicAudit.exe 2>$null | Out-Null
+
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "Building React Frontend..." -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
