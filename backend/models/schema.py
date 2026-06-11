@@ -236,6 +236,7 @@ class BankTransaction(BaseModel):
     balance: Optional[Decimal] = None
     ref_no: Optional[str] = None
     bank_name: str = ""
+    category: Optional[str] = "Uncategorized"
 
 class BankReconciliationItem(BaseModel):
     item_type: str                      # MATCHED | GL_ONLY | BANK_ONLY
@@ -246,6 +247,8 @@ class BankReconciliationItem(BaseModel):
     gl_narration: Optional[str] = None
     bank_narration: Optional[str] = None
     day_diff: int = 0
+    category: Optional[str] = "Uncategorized"
+    is_debit: bool = False
 
 class BankReconciliationSummary(BaseModel):
     bank_file: str

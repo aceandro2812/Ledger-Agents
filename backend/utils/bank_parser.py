@@ -16,6 +16,22 @@ from decimal import Decimal, InvalidOperation
 from typing import List, Optional, Dict, Tuple
 import os
 
+try:
+    from openpyxl.worksheet.filters import CustomFilterValueDescriptor
+    if not getattr(CustomFilterValueDescriptor, "_patched", False):
+        from openpyxl.descriptors.base import Convertible
+        _orig_set = CustomFilterValueDescriptor.__set__
+        def _patched_set(self, instance, value):
+            if isinstance(value, str):
+                self.expected_type = str
+                Convertible.__set__(self, instance, value)
+            else:
+                _orig_set(self, instance, value)
+        CustomFilterValueDescriptor.__set__ = _patched_set
+        CustomFilterValueDescriptor._patched = True
+except Exception as e:
+    print(f"[Monkeypatch Warning] Failed to patch openpyxl filters descriptor: {e}")
+
 from backend.models.schema import BankTransaction
 from backend.utils.date_utils import parse_date
 
@@ -217,6 +233,47 @@ _PARSERS = {
 }
 
 
+def categorize_narration(narration: str, is_debit: bool) -> str:
+    if not narration:
+        return "Vendor Payments" if is_debit else "Customer Receipts"
+    n_lower = str(narration).lower()
+    
+    # 1. Salary / Payroll
+    if any(kw in n_lower for kw in ["salary", "payroll", "wage", "slip", "sal.", "incentive", "bonus"]):
+        return "Salary / Payroll"
+    
+    # 2. Rent & Infrastructure
+    if any(kw in n_lower for kw in ["rent", "lease", "estate", "infra", "maintenance", "brokerage"]):
+        return "Rent & Infrastructure"
+        
+    # 3. Utilities
+    if any(kw in n_lower for kw in ["electricity", "water", "power", "internet", "broadband", "telecom", "telephone", "mobile", "utility"]):
+        return "Utilities"
+        
+    # 4. Taxes & Compliance
+    if any(kw in n_lower for kw in ["gst", "tds", "tax", "excise", "vat", "customs", "income tax", "pf", "provident", "esi", "professional tax"]):
+        return "Taxes & Compliance"
+        
+    # 5. Bank Charges & Interest
+    if any(kw in n_lower for kw in ["bank charges", "chg", "commission", "processing", "interest", "int.", "fee", "bounced", "penalty", "card charges"]):
+        return "Bank Charges & Interest"
+        
+    # 6. Cash Deposit / Withdrawal
+    if any(kw in n_lower for kw in ["cash deposit", "cash dep", "cash self", "atm wdl", "cash withdrawal", "cash wdl", "atm"]):
+        return "Cash Deposit / Withdrawal"
+        
+    # 7. Loan Repayments / Receipts
+    if any(kw in n_lower for kw in ["emi", "loan", "repayment", "disbursement", "mortgage"]):
+        return "Loan Repayments / Receipts"
+        
+    # 8. Travel & Office Expense
+    if any(kw in n_lower for kw in ["travel", "fuel", "petrol", "cab", "uber", "ola", "stay", "hotel", "stationary", "pantry", "courier", "postage"]):
+        return "Travel & Office Expense"
+
+    # Default
+    return "Vendor Payments" if is_debit else "Customer Receipts"
+
+
 def parse_bank_statement(file_path: str) -> Tuple[str, List[BankTransaction]]:
     """
     Parse a bank statement file (CSV or XLSX).
@@ -242,7 +299,7 @@ def parse_bank_statement(file_path: str) -> Tuple[str, List[BankTransaction]]:
 
     elif ext in (".xlsx", ".xlsm"):
         import openpyxl
-        wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=True, read_only=False)
         ws = wb.active
         all_rows = list(ws.iter_rows(values_only=True))
         # Find header row (first row with enough non-None cells)
@@ -268,5 +325,6 @@ def parse_bank_statement(file_path: str) -> Tuple[str, List[BankTransaction]]:
     # If bank_name was UNKNOWN, still tag transactions
     for t in transactions:
         t.bank_name = bank_name
+        t.category = categorize_narration(t.narration, t.debit > 0)
 
     return bank_name, transactions

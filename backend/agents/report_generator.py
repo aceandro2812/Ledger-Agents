@@ -414,7 +414,12 @@ def _build_template_memo(
     critical_anomalies = [a for a in anomalies if a.severity == "CRITICAL"]
     high_anomalies = [a for a in anomalies if a.severity == "HIGH"]
     rec_discrepancies = [r for r in reconciliation if r.has_discrepancy]
-    overdue_parties = [a for a in aging if a.bucket_91_180 + a.bucket_181_365 + a.bucket_over_365 > 0]
+    overdue_parties = [
+        a for a in aging 
+        if a.aging_buckets.get("91-180", Decimal('0.00')) 
+        + a.aging_buckets.get("181-365", Decimal('0.00')) 
+        + a.aging_buckets.get(">365", Decimal('0.00')) > 0
+    ]
 
     scope = (
         f"Forensic ledger audit covering {len(aging)} parties. "

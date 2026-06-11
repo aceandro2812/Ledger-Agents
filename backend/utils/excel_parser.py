@@ -3,6 +3,23 @@ import io
 import os
 from typing import Any, Dict, List, Union
 import openpyxl
+
+try:
+    from openpyxl.worksheet.filters import CustomFilterValueDescriptor
+    if not getattr(CustomFilterValueDescriptor, "_patched", False):
+        from openpyxl.descriptors.base import Convertible
+        _orig_set = CustomFilterValueDescriptor.__set__
+        def _patched_set(self, instance, value):
+            if isinstance(value, str):
+                self.expected_type = str
+                Convertible.__set__(self, instance, value)
+            else:
+                _orig_set(self, instance, value)
+        CustomFilterValueDescriptor.__set__ = _patched_set
+        CustomFilterValueDescriptor._patched = True
+except Exception as e:
+    print(f"[Monkeypatch Warning] Failed to patch openpyxl filters descriptor: {e}")
+
 from openpyxl.worksheet.worksheet import Worksheet
 
 class RawRow:

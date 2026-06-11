@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { Users, AlertCircle, Clock, Search, ChevronUp, ChevronDown, ArrowUpDown, Package, TrendingDown, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { 
+  Users, AlertCircle, Clock, Search, ChevronUp, ChevronDown, 
+  ArrowUpDown, TrendingDown, CheckCircle, Upload, 
+  RefreshCw, Info
+} from 'lucide-react';
 
 const BUCKETS = ['0-30', '31-60', '61-90', '91-180', '181-365', '>365'];
 
@@ -13,58 +18,126 @@ const BUCKET_STYLE = {
 };
 
 export default function CreditorsLedger({ results }) {
-  const aging = results?.aging ?? [];
-  const currencySymbol = results?.currency_symbol ?? 'Rs.';
+  const backendUrl = import.meta.env.VITE_API_URL || (window.location.port === '5173' ? 'http://localhost:8000' : '');
 
-  // Identify creditors: prefer backend is_creditor flag, fall back to heuristic
-  const creditors = aging.filter((p) => {
-    if (p.is_creditor !== undefined) return p.is_creditor === true;
-    // Fallback heuristic: credits > debits means we received more invoices than we paid
-    return Number(p.total_credits) > Number(p.total_debits) || Number(p.outstanding_balance) < 0;
-  });
+  // Local state for direct uploads
+  const [directAnalysis, setDirectAnalysis] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
 
+  // Sorting & Filtering
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState('outstanding_abs');
   const [sortAsc, setSortAsc] = useState(false);
+
+  // Determine active aging list
+  const activeAging = directAnalysis?.aging ?? results?.aging ?? [];
+  const currencySymbol = results?.currency_symbol ?? 'Rs.';
+
+  // Identify creditors: prefer backend is_creditor flag, fall back to heuristic
+  const creditors = activeAging.filter((p) => {
+    if (p.is_creditor !== undefined) return p.is_creditor === true;
+    return Number(p.total_credits) > 0 || Number(p.outstanding_balance) < 0;
+  });
 
   const fmt = (val) => {
     const abs = Math.abs(Number(val));
     return `${currencySymbol} ${abs.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // ── Empty state ──────────────────────────────────────────────────────────────
+  const onDrop = async (acceptedFiles) => {
+    if (acceptedFiles.length === 0) return;
+    setUploading(true);
+    setError(null);
+
+    const file = acceptedFiles[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${backendUrl}/analyze/creditors`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Analysis failed');
+      }
+
+      const data = await res.json();
+      setDirectAnalysis(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'],
+      'text/csv': ['.csv']
+    },
+    multiple: false
+  });
+
+  // ── Direct Creditors Upload screen if empty ──────────────────────────────────────────
   if (creditors.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-4xl mx-auto py-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-white mb-1.5 flex items-center gap-2">
             <Users className="w-6 h-6 text-purple-400" />
-            Creditors Ledger &nbsp;
-            <span className="text-sm font-normal text-gray-500">(AP Analysis)</span>
+            Creditors Ledger Audit (AP Suite)
           </h2>
-          <p className="text-sm text-gray-500">Accounts Payable aging · Vendor duplicate payments · Overdue payables</p>
+          <p className="text-sm text-gray-400">
+            Upload your accounts payable or creditors purchase ledger dump to calculate invoice aging, identify vendor credit buckets, and monitor outstanding payments.
+          </p>
         </div>
 
-        <div className="flex flex-col items-center justify-center py-24 bg-dark-800 border border-dark-700 rounded-2xl gap-5 text-center px-8">
-          <div className="p-5 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
-            <Package className="w-10 h-10 text-purple-400" />
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-2xl p-16 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
+            isDragActive
+              ? 'border-purple-500 bg-purple-950/20'
+              : 'border-dark-600 bg-dark-800 hover:border-purple-500/50 hover:bg-dark-800/80'
+          }`}
+        >
+          <input {...getInputProps()} />
+          <div className="p-4 bg-dark-700 rounded-full text-purple-400 mb-4 shadow-inner">
+            <Upload className="w-10 h-10 animate-pulse" />
           </div>
-          <div>
-            <p className="text-lg font-bold text-white mb-2">No Creditors Data in This Audit</p>
-            <p className="text-sm text-gray-400 max-w-md">
-              A Creditors Ledger (AP / Purchase Ledger) was not included in this audit run.
-              To see vendor aging, overdue payables, and AP analysis, start a new audit and use the
-              <strong className="text-purple-300"> dedicated Creditors Ledger upload</strong> section on the upload screen.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1.5 text-xs text-gray-500 bg-dark-900 border border-dark-700 rounded-xl px-5 py-4 text-left max-w-sm">
-            <p className="font-bold text-gray-300 mb-1">Supported formats:</p>
-            <p>• Tally XML / Creditors ledger export (.xlsx)</p>
-            <p>• SAP AP aging report (.xlsx / .csv)</p>
-            <p>• Busy / Marg Purchase ledger dump</p>
-            <p>• Any columnar .csv with party, date, debit, credit</p>
-          </div>
+          
+          {uploading ? (
+            <div className="text-center">
+              <p className="text-lg font-bold text-white mb-2">Analyzing Creditors Ledger...</p>
+              <p className="text-sm text-gray-400">Parsing structure, matching credits/debits, and calculating aging buckets</p>
+            </div>
+          ) : isDragActive ? (
+            <p className="text-lg font-bold text-purple-400">Drop creditors ledger here...</p>
+          ) : (
+            <div className="text-center">
+              <p className="text-lg font-bold text-white mb-2">Drag & Drop creditors ledger here</p>
+              <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
+              <span className="bg-dark-700 border border-dark-600 text-purple-400 hover:bg-dark-600 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
+                Select Ledger File
+              </span>
+            </div>
+          )}
         </div>
+
+        {error && (
+          <div className="bg-red-950/30 border border-red-500/50 rounded-xl p-4 flex gap-3 text-red-300">
+            <Info className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <h4 className="font-bold">Error</h4>
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -120,15 +193,30 @@ export default function CreditorsLedger({ results }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-          <Users className="w-6 h-6 text-purple-400" />
-          Creditors Ledger
-          <span className="text-sm font-normal text-gray-500 ml-1">(AP Analysis)</span>
-        </h2>
-        <p className="text-sm text-gray-500">
-          {creditors.length} creditors analysed · Accounts Payable aging and vendor payment review
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-dark-700 pb-5">
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+            <Users className="w-6 h-6 text-purple-400" />
+            Creditors Ledger
+            <span className="text-sm font-normal text-gray-500 ml-1">(AP Analysis)</span>
+          </h2>
+          <p className="text-sm text-gray-500">
+            {creditors.length} creditors analysed · Accounts Payable aging and vendor payment review
+          </p>
+        </div>
+
+        <div>
+          <button
+            onClick={() => {
+              setDirectAnalysis(null);
+              setError(null);
+            }}
+            className="bg-dark-800 hover:bg-dark-700 border border-dark-700 text-gray-300 font-bold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Upload New Ledger
+          </button>
+        </div>
       </div>
 
       {/* KPI Row */}
@@ -297,9 +385,6 @@ export default function CreditorsLedger({ results }) {
             <p className="text-sm font-semibold text-green-400 flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
               {cleared.length} vendor{cleared.length !== 1 ? 's' : ''} fully settled (zero outstanding balance)
-            </p>
-            <p className="text-xs text-gray-500 mt-1 ml-6">
-              {cleared.map((p) => p.party).join(' · ')}
             </p>
           </div>
         );

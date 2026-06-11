@@ -79,10 +79,13 @@ def reconcile_with_bank(
                     gl_narration=gl.narration,
                     bank_narration=bk.narration,
                     day_diff=abs((gl.date - bk.date).days),
+                    category=bk.category or "Uncategorized",
+                    is_debit=bk.debit > 0,
                 ))
                 break
 
     # GL_ONLY entries (in books but not in bank)
+    from backend.utils.bank_parser import categorize_narration
     gl_only_amount = Decimal("0.00")
     for gi, gl in enumerate(gl_entries):
         if gi not in matched_gl_idxs:
@@ -97,6 +100,8 @@ def reconcile_with_bank(
                 gl_narration=gl.narration,
                 bank_narration=None,
                 day_diff=0,
+                category=categorize_narration(gl.narration, gl.debit > 0),
+                is_debit=gl.debit > 0,
             ))
 
     # BANK_ONLY entries (in bank but not in books)
@@ -114,6 +119,8 @@ def reconcile_with_bank(
                 gl_narration=None,
                 bank_narration=bk.narration,
                 day_diff=0,
+                category=bk.category or "Uncategorized",
+                is_debit=bk.debit > 0,
             ))
 
     gl_only_count   = sum(1 for it in items if it.item_type == "GL_ONLY")

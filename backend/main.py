@@ -7,6 +7,23 @@ import datetime as dt
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, List
+
+try:
+    from openpyxl.worksheet.filters import CustomFilterValueDescriptor
+    if not getattr(CustomFilterValueDescriptor, "_patched", False):
+        from openpyxl.descriptors.base import Convertible
+        _orig_set = CustomFilterValueDescriptor.__set__
+        def _patched_set(self, instance, value):
+            if isinstance(value, str):
+                self.expected_type = str
+                Convertible.__set__(self, instance, value)
+            else:
+                _orig_set(self, instance, value)
+        CustomFilterValueDescriptor.__set__ = _patched_set
+        CustomFilterValueDescriptor._patched = True
+except Exception as e:
+    print(f"[Monkeypatch Warning] Failed to patch openpyxl filters descriptor: {e}")
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -477,6 +494,147 @@ def test_llm_connection(payload: SettingsPayload):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=502, detail=f"LLM connection test failed: {str(e)}")
+
+@app.post("/analyze/bank-statement")
+def analyze_bank_statement_endpoint(
+    file: UploadFile = File(...)
+):
+    """
+    Directly parse and categorize a bank statement without requiring a primary GL ledger.
+    """
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".xlsx", ".xlsm", ".csv"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Unsupported file extension. Please upload an Excel (.xlsx, .xlsm) or CSV (.csv) file."
+        )
+    
+    # Save file
+    audit_id = str(uuid.uuid4())
+    local_path = os.path.join(UPLOAD_DIR, f"{audit_id}_BS{ext}")
+    try:
+        with open(local_path, "wb") as f:
+            f.write(file.file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save bank statement: {str(e)}")
+        
+    try:
+        from backend.utils.bank_parser import parse_bank_statement
+        bank_name, transactions = parse_bank_statement(local_path)
+        
+        # Calculate summary metrics
+        total_debits = Decimal("0.00")
+        total_credits = Decimal("0.00")
+        category_summary = {}
+        txns_list = []
+        
+        for t in transactions:
+            total_debits += t.debit
+            total_credits += t.credit
+            cat = t.category or "Uncategorized"
+            category_summary[cat] = category_summary.get(cat, Decimal("0.00")) + (t.debit if t.debit > 0 else t.credit)
+            
+            txns_list.append({
+                "row_idx": t.row_idx,
+                "date": t.date.isoformat(),
+                "narration": t.narration,
+                "debit": float(t.debit),
+                "credit": float(t.credit),
+                "balance": float(t.balance) if t.balance is not None else None,
+                "ref_no": t.ref_no,
+                "bank_name": t.bank_name,
+                "category": cat
+            })
+            
+        # Format categories summary
+        cat_summary_float = {k: float(v) for k, v in category_summary.items()}
+        
+        results = {
+            "bank_name": bank_name,
+            "filename": filename,
+            "total_transactions": len(transactions),
+            "total_debits": float(total_debits),
+            "total_credits": float(total_credits),
+            "category_summary": cat_summary_float,
+            "transactions": txns_list
+        }
+        
+        return results
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Bank statement analysis failed: {str(e)}")
+
+@app.post("/analyze/creditors")
+def analyze_creditors_endpoint(
+    file: UploadFile = File(...),
+    as_on_date: Optional[str] = None
+):
+    """
+    Directly parse and calculate aging for a creditors ledger.
+    """
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".xlsx", ".xlsm", ".csv"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Unsupported file extension. Please upload an Excel (.xlsx, .xlsm) or CSV (.csv) file."
+        )
+    
+    # Save file
+    audit_id = str(uuid.uuid4())
+    local_path = os.path.join(UPLOAD_DIR, f"{audit_id}_CR{ext}")
+    try:
+        with open(local_path, "wb") as f:
+            f.write(file.file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save creditors ledger: {str(e)}")
+        
+    try:
+        from backend.utils.excel_parser import parse_file
+        from backend.agents.structure_detector import detect_structure
+        from backend.agents.ingestion import ingest_transactions
+        from backend.agents.aging_fifo import calculate_aging_fifo
+        from backend.utils.llm import LLMClient
+        from backend.models.schema import PartyAgingSummary
+        
+        # 1. Parse spreadsheet rows
+        sheets = parse_file(local_path)
+        if not sheets:
+            raise HTTPException(status_code=400, detail="The uploaded spreadsheet contains no worksheets.")
+        sheet_name = list(sheets.keys())[0]
+        rows = sheets[sheet_name]
+        
+        # 2. Detect schema
+        llm = LLMClient()
+        schema_map = detect_structure(rows, llm_client=llm)
+        
+        # 3. Ingest transactions
+        txns = ingest_transactions(rows, schema_map)
+        
+        # 4. Calculate aging
+        as_on_dt = None
+        if as_on_date:
+            from backend.utils.date_utils import parse_date
+            as_on_dt = parse_date(as_on_date)
+            
+        aging_res = calculate_aging_fifo(txns, as_on_dt)
+        
+        # Force is_creditor = True for the results since this is a creditors ledger
+        aging_dict_list = []
+        for a in aging_res:
+            a.is_creditor = True
+            aging_dict_list.append(a.model_dump())
+            
+        return {
+            "aging": aging_dict_list
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Creditors analysis failed: {str(e)}")
 
 # Serve frontend static assets from the React dist folder if it exists
 import sys
