@@ -141,7 +141,7 @@ export default function App() {
             <Shield className="w-5 h-5" />
           </div>
           <div>
-            <span className="font-extrabold text-white text-base tracking-wider uppercase block">Antigravity</span>
+            <span className="font-extrabold text-white text-base tracking-wider uppercase block">Ledger Forensic Audit</span>
             <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block">Forensic Ledger Engine</span>
           </div>
         </div>
@@ -231,6 +231,25 @@ export default function App() {
                 </button>
               ))}
 
+              <div className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 px-3 mt-4 mb-1.5">Independent Workspaces</div>
+              {[
+                { key: 'creditors', label: 'Creditors (AP) Audit', icon: Users },
+                { key: 'bank_recon', label: 'Bank Statement Analysis', icon: CreditCard }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setCurrentTab(tab.key)}
+                  className={`w-full text-left text-xs font-bold px-3 py-2.5 rounded-xl transition-all flex items-center gap-2.5 ${
+                    currentTab === tab.key
+                      ? 'bg-purple-600 text-white shadow-[0_4px_12px_rgba(147,51,234,0.2)]'
+                      : 'text-gray-400 hover:bg-dark-800 hover:text-white'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              ))}
+
               <div className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 px-3 mt-4 mb-1.5">General Ledger Suite</div>
               {[
                 { key: 'dashboard', label: 'Overview Dashboard', icon: BarChart2 },
@@ -252,25 +271,6 @@ export default function App() {
                   className={`w-full text-left text-xs font-bold px-3 py-2.5 rounded-xl transition-all flex items-center gap-2.5 ${
                     currentTab === tab.key
                       ? 'bg-blue-600 text-white shadow-[0_4px_12px_rgba(37,99,235,0.2)]'
-                      : 'text-gray-400 hover:bg-dark-800 hover:text-white'
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              ))}
-
-              <div className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 px-3 mt-4 mb-1.5">Independent Workspaces</div>
-              {[
-                { key: 'creditors', label: 'Creditors (AP) Audit', icon: Users },
-                { key: 'bank_recon', label: 'Bank Statement Analysis', icon: CreditCard }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setCurrentTab(tab.key)}
-                  className={`w-full text-left text-xs font-bold px-3 py-2.5 rounded-xl transition-all flex items-center gap-2.5 ${
-                    currentTab === tab.key
-                      ? 'bg-purple-600 text-white shadow-[0_4px_12px_rgba(147,51,234,0.2)]'
                       : 'text-gray-400 hover:bg-dark-800 hover:text-white'
                   }`}
                 >
