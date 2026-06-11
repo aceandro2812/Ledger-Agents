@@ -488,9 +488,26 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
                         : 'border-red-900/50 opacity-60'
                     }`}
                   >
-                    <div>
-                      <h4 className="text-sm font-semibold text-white truncate max-w-xs">{a.filename}</h4>
-                      <span className="text-xs text-gray-500">
+                    <div className="flex-1 min-w-0 pr-4 text-left">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h4 className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-xs" title={a.filename}>
+                          {a.filename}
+                        </h4>
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          a.audit_type === 'bank_statement'
+                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                            : a.audit_type === 'creditors'
+                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                            : 'bg-dark-750 text-gray-400 border-dark-650'
+                        }`}>
+                          {a.audit_type === 'bank_statement'
+                            ? 'BANK STATEMENT'
+                            : a.audit_type === 'creditors'
+                            ? 'CREDITORS AP'
+                            : 'GENERAL LEDGER'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 block">
                         {new Date(a.created_at).toLocaleString()}
                       </span>
                     </div>

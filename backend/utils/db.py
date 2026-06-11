@@ -19,6 +19,7 @@ class AuditRecord(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     results_json = Column(Text, nullable=True)       # Full final state JSON
     extra_files_json = Column(Text, nullable=True)   # JSON list of {file_path, ledger_type}
+    audit_type = Column(String, default="general_ledger") # general_ledger, bank_statement, creditors
 
 # Create SQLite engine and session factory
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -26,6 +27,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE audits ADD COLUMN audit_type VARCHAR DEFAULT 'general_ledger'"))
+            conn.commit()
+    except Exception:
+        # column already exists
+        pass
 
 def get_db():
     db = SessionLocal()

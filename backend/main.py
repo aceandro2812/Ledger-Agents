@@ -322,7 +322,8 @@ def list_audits(db: Session = Depends(get_db)):
             "id": r.id,
             "filename": r.filename,
             "status": r.status,
-            "created_at": r.created_at.isoformat()
+            "created_at": r.created_at.isoformat(),
+            "audit_type": getattr(r, "audit_type", "general_ledger")
         }
         for r in records
     ]
@@ -497,7 +498,8 @@ def test_llm_connection(payload: SettingsPayload):
 
 @app.post("/analyze/bank-statement")
 def analyze_bank_statement_endpoint(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
     """
     Directly parse and categorize a bank statement without requiring a primary GL ledger.
@@ -557,8 +559,23 @@ def analyze_bank_statement_endpoint(
             "total_debits": float(total_debits),
             "total_credits": float(total_credits),
             "category_summary": cat_summary_float,
-            "transactions": txns_list
+            "transactions": txns_list,
+            "audit_type": "bank_statement"
         }
+        
+        # Save to database
+        from backend.utils.db import AuditRecord
+        import json
+        record = AuditRecord(
+            id=audit_id,
+            filename=filename,
+            file_path=local_path,
+            status="completed",
+            results_json=json.dumps(results),
+            audit_type="bank_statement"
+        )
+        db.add(record)
+        db.commit()
         
         return results
     except Exception as e:
@@ -569,7 +586,8 @@ def analyze_bank_statement_endpoint(
 @app.post("/analyze/creditors")
 def analyze_creditors_endpoint(
     file: UploadFile = File(...),
-    as_on_date: Optional[str] = None
+    as_on_date: Optional[str] = None,
+    db: Session = Depends(get_db)
 ):
     """
     Directly parse and calculate aging for a creditors ledger.
@@ -627,9 +645,28 @@ def analyze_creditors_endpoint(
             a.is_creditor = True
             aging_dict_list.append(a.model_dump())
             
-        return {
-            "aging": aging_dict_list
+        results = {
+            "aging": aging_dict_list,
+            "filename": filename,
+            "as_on_date": as_on_date,
+            "audit_type": "creditors"
         }
+        
+        # Save to database
+        from backend.utils.db import AuditRecord
+        import json
+        record = AuditRecord(
+            id=audit_id,
+            filename=filename,
+            file_path=local_path,
+            status="completed",
+            results_json=json.dumps(results),
+            audit_type="creditors"
+        )
+        db.add(record)
+        db.commit()
+        
+        return results
         
     except Exception as e:
         import traceback

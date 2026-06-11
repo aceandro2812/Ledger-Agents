@@ -75,9 +75,20 @@ export default function App() {
       .then((res) => res.json())
       .then((data) => {
         setActiveFilename(data.filename);
+        
+        // Determine audit type from results or API metadata
+        const auditType = data.results?.audit_type || data.audit_type || 'general_ledger';
+        
         setResults(data.results);
         setPage('results');
-        setCurrentTab('dashboard');
+        
+        if (auditType === 'bank_statement') {
+          setCurrentTab('bank_recon');
+        } else if (auditType === 'creditors') {
+          setCurrentTab('creditors');
+        } else {
+          setCurrentTab('dashboard');
+        }
       })
       .catch((err) => {
         console.error('Failed to load past audit details', err);

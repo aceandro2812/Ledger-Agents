@@ -79,6 +79,8 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
       category_summary: catSum,
       transactions: txns
     };
+  } else if (results && results.audit_type === 'bank_statement') {
+    activeData = results;
   } else {
     activeData = directAnalysis;
   }
