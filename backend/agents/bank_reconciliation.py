@@ -68,8 +68,16 @@ def reconcile_with_bank(
             bk_amt = bk.debit if bk.debit > 0 else bk.credit
 
             if _amounts_match(gl_amt, bk_amt) and _dates_match(gl.date, bk.date):
+                # Verify GL Debit (receipt) matches Bank Credit (deposit)
+                # and GL Credit (payment) matches Bank Debit (withdrawal)
+                is_gl_dr = gl.debit > 0
+                is_bk_cr = bk.credit > 0
+                if is_gl_dr != is_bk_cr:
+                    continue
+
                 matched_gl_idxs.add(gi)
                 matched_bank_idxs.add(bi)
+
                 items.append(BankReconciliationItem(
                     item_type="MATCHED",
                     gl_row_idx=gl.row_idx,

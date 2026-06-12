@@ -395,7 +395,10 @@ def generate_excel_report(
     auto_fit_columns(ws_rec)
     
     # Save Workbook
-    wb.save(file_path)
+    try:
+        wb.save(file_path)
+    finally:
+        wb.close()
 
 def _build_template_memo(
     duplicates: List[DuplicatePaymentFinding],

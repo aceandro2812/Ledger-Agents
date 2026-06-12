@@ -44,6 +44,15 @@ def parse_date(date_val: Union[str, datetime, date, int, float, None]) -> Option
         if not cleaned:
             return None
 
+        # Check if it is a numeric string (Excel serial date)
+        try:
+            val_float = float(cleaned)
+            if 30000 <= val_float <= 100000:
+                excel_epoch = datetime(1899, 12, 30)
+                return (excel_epoch + timedelta(days=val_float)).date()
+        except ValueError:
+            pass
+
         # Check if it looks like a timestamp (e.g. 2026-05-23 18:30:00 or similar)
         # Try full datetime formats first
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S"):

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   Users, AlertCircle, Clock, Search, ChevronUp, ChevronDown, 
   ArrowUpDown, TrendingDown, CheckCircle, Upload, 
-  RefreshCw, Info
+  RefreshCw, Info, Loader2, History, Play
 } from 'lucide-react';
 
 const BUCKETS = ['0-30', '31-60', '61-90', '91-180', '181-365', '>365'];
@@ -29,6 +29,43 @@ export default function CreditorsLedger() {
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState('outstanding_abs');
   const [sortAsc, setSortAsc] = useState(false);
+
+  // History States
+  const [pastAudits, setPastAudits] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  useEffect(() => {
+    if (!directAnalysis) {
+      setLoadingHistory(true);
+      fetch(`${backendUrl}/audits`)
+        .then((res) => res.json())
+        .then((data) => {
+          setPastAudits(data.filter((a) => a.audit_type === 'creditors'));
+          setLoadingHistory(false);
+        })
+        .catch((err) => {
+          console.error('Failed to load past audits', err);
+          setLoadingHistory(false);
+        });
+    }
+  }, [directAnalysis]);
+
+  const handleLoadPastAudit = async (auditId) => {
+    setLoadingHistory(true);
+    setError(null);
+    try {
+      const res = await fetch(`${backendUrl}/audit/${auditId}`);
+      if (!res.ok) {
+        throw new Error('Failed to load past audit');
+      }
+      const data = await res.json();
+      setDirectAnalysis(data.results);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // Determine active aging list — local state only, never bleeds GL results
   const activeAging = directAnalysis?.aging ?? [];
@@ -85,7 +122,7 @@ export default function CreditorsLedger() {
   });
 
   // ── Direct Creditors Upload screen if empty ──────────────────────────────────────────
-  if (creditors.length === 0) {
+  if (!directAnalysis) {
     return (
       <div className="space-y-6 max-w-4xl mx-auto py-6">
         <div>
@@ -98,36 +135,47 @@ export default function CreditorsLedger() {
           </p>
         </div>
 
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-16 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
-            isDragActive
-              ? 'border-purple-500 bg-purple-950/20'
-              : 'border-dark-600 bg-dark-800 hover:border-purple-500/50 hover:bg-dark-800/80'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <div className="p-4 bg-dark-700 rounded-full text-purple-400 mb-4 shadow-inner">
-            <Upload className="w-10 h-10 animate-pulse" />
+        {uploading ? (
+          <div className="border border-dark-700 bg-dark-800 rounded-2xl p-16 flex flex-col justify-center items-center shadow-xl">
+            <div className="p-4 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-2xl mb-4">
+              <Loader2 className="w-10 h-10 animate-spin text-purple-400" />
+            </div>
+            <div className="text-center max-w-sm">
+              <h3 className="text-lg font-bold text-white mb-1.5">Analyzing Creditors Ledger...</h3>
+              <p className="text-sm text-gray-400">
+                Parsing transaction mappings, matching settlements chronologically via FIFO, and computing outstanding aging buckets.
+              </p>
+              <div className="w-48 bg-dark-900 h-1.5 rounded-full mt-5 mx-auto overflow-hidden">
+                <div className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full animate-pulse w-full" />
+              </div>
+            </div>
           </div>
-          
-          {uploading ? (
-            <div className="text-center">
-              <p className="text-lg font-bold text-white mb-2">Analyzing Creditors Ledger...</p>
-              <p className="text-sm text-gray-400">Parsing structure, matching credits/debits, and calculating aging buckets</p>
+        ) : (
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-2xl p-16 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
+              isDragActive
+                ? 'border-purple-500 bg-purple-950/20'
+                : 'border-dark-600 bg-dark-800 hover:border-purple-500/50 hover:bg-dark-800/80'
+            }`}
+          >
+            <input {...getInputProps()} />
+            <div className="p-4 bg-dark-700 rounded-full text-purple-400 mb-4 shadow-inner">
+              <Upload className="w-10 h-10 animate-pulse" />
             </div>
-          ) : isDragActive ? (
-            <p className="text-lg font-bold text-purple-400">Drop creditors ledger here...</p>
-          ) : (
-            <div className="text-center">
-              <p className="text-lg font-bold text-white mb-2">Drag & Drop creditors ledger here</p>
-              <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
-              <span className="bg-dark-700 border border-dark-600 text-purple-400 hover:bg-dark-600 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
-                Select Ledger File
-              </span>
-            </div>
-          )}
-        </div>
+            {isDragActive ? (
+              <p className="text-lg font-bold text-purple-400">Drop creditors ledger here...</p>
+            ) : (
+              <div className="text-center">
+                <p className="text-lg font-bold text-white mb-2">Drag & Drop creditors ledger here</p>
+                <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
+                <span className="bg-dark-700 border border-dark-600 text-purple-400 hover:bg-dark-600 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
+                  Select Ledger File
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-950/30 border border-red-500/50 rounded-xl p-4 flex gap-3 text-red-300">
@@ -138,6 +186,66 @@ export default function CreditorsLedger() {
             </div>
           </div>
         )}
+
+        {/* Audit History Card */}
+        <div className="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl mt-6">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <History className="w-5 h-5 text-gray-400" />
+            Local Creditors Audit History
+          </h3>
+          
+          {loadingHistory ? (
+            <div className="flex justify-center items-center py-6 gap-2 text-sm text-gray-500">
+              <Loader2 className="w-4.5 h-4.5 animate-spin text-purple-400" />
+              <span>Loading history...</span>
+            </div>
+          ) : pastAudits.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">No historical creditors ledgers analyzed on this machine.</p>
+          ) : (
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+              {pastAudits.map((a) => (
+                <div
+                  key={a.id}
+                  onClick={() => a.status === 'completed' && handleLoadPastAudit(a.id)}
+                  className={`flex items-center justify-between p-3.5 bg-dark-900 border rounded-xl transition-all ${
+                    a.status === 'completed' 
+                      ? 'border-dark-600 cursor-pointer hover:border-purple-500 hover:bg-dark-900/60' 
+                      : 'border-red-900/50 opacity-60'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0 pr-4 text-left">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-xs" title={a.filename}>
+                        {a.filename}
+                      </h4>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded border whitespace-nowrap bg-purple-500/10 text-purple-450 border-purple-500/20">
+                        CREDITORS AP
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500 block">
+                      {new Date(a.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                      a.status === 'completed'
+                        ? 'bg-green-950/40 text-green-400 border border-green-800/40'
+                        : a.status === 'failed'
+                        ? 'bg-red-950/40 text-red-400 border border-red-800/40'
+                        : 'bg-yellow-950/40 text-yellow-400 border border-yellow-800/40'
+                    }`}>
+                      {a.status.toUpperCase()}
+                    </span>
+                    {a.status === 'completed' && (
+                      <Play className="w-4 h-4 text-purple-400 hover:text-purple-300" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -152,21 +260,23 @@ export default function CreditorsLedger() {
     const b = p.aging_buckets ?? {};
     return s + ['181-365', '>365'].reduce((bs, k) => bs + Number(b[k] ?? 0), 0);
   }, 0);
-  const largestCreditor = creditors.reduce((a, b) =>
-    Math.abs(Number(a.outstanding_balance)) >= Math.abs(Number(b.outstanding_balance)) ? a : b
-  );
+  const largestCreditor = creditors.length > 0
+    ? creditors.reduce((a, b) => Math.abs(Number(a.outstanding_balance)) >= Math.abs(Number(b.outstanding_balance)) ? a : b)
+    : null;
   const zeroPaymentCount = creditors.filter((p) => p.flag_zero_payments).length;
   const unsettledOpeningCount = creditors.filter((p) => p.flag_unsettled_opening).length;
   const overduePercent = totalAP > 0 ? ((overdueAP / totalAP) * 100).toFixed(1) : '0.0';
 
   // ── Sort & Filter ─────────────────────────────────────────────────────────────
   const displayed = creditors
-    .filter((p) => p.party.toLowerCase().includes(search.toLowerCase()))
+    .filter((p) => (p.party || '').toLowerCase().includes(search.toLowerCase()))
     .map((p) => ({ ...p, outstanding_abs: Math.abs(Number(p.outstanding_balance)) }))
     .sort((a, b) => {
       let av, bv;
       if (sortField === 'party') {
-        return sortAsc ? a.party.localeCompare(b.party) : b.party.localeCompare(a.party);
+        const aParty = a.party || '';
+        const bParty = b.party || '';
+        return sortAsc ? aParty.localeCompare(bParty) : bParty.localeCompare(aParty);
       }
       if (BUCKETS.includes(sortField)) {
         av = Number(a.aging_buckets?.[sortField] ?? 0);
@@ -219,8 +329,25 @@ export default function CreditorsLedger() {
         </div>
       </div>
 
-      {/* Quick Guide Card */}
-      <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-5 flex gap-4 text-sm text-gray-300">
+      {creditors.length === 0 ? (
+        <div className="bg-dark-800 border border-dark-700 rounded-2xl p-16 text-center flex flex-col items-center justify-center gap-4">
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl">
+            <Info className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto">
+            <h3 className="text-lg font-bold text-white mb-2">No Creditors Found</h3>
+            <p className="text-sm text-gray-400">
+              The uploaded ledger does not contain any parties with creditor characteristics (accounts with net credits or negative outstanding balances).
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Please check if you uploaded a debtors/receivables ledger by mistake.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Quick Guide Card */}
+          <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-5 flex gap-4 text-sm text-gray-300">
         <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl h-fit">
           <Info className="w-5.5 h-5.5" />
         </div>
@@ -262,8 +389,12 @@ export default function CreditorsLedger() {
 
         <div className="bg-dark-800 border border-dark-700 rounded-xl p-4">
           <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Largest Vendor</p>
-          <p className="text-sm font-bold text-purple-300 truncate" title={largestCreditor.party}>{largestCreditor.party}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{fmt(largestCreditor.outstanding_balance)} outstanding</p>
+          <p className="text-sm font-bold text-purple-300 truncate" title={largestCreditor ? largestCreditor.party : 'None'}>
+            {largestCreditor ? largestCreditor.party : 'None'}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {largestCreditor ? `${fmt(largestCreditor.outstanding_balance)} outstanding` : 'N/A'}
+          </p>
         </div>
       </div>
 
@@ -410,6 +541,8 @@ export default function CreditorsLedger() {
           </div>
         );
       })()}
+        </>
+      )}
     </div>
   );
 }

@@ -31,9 +31,9 @@ if (-not (Test-Path $pyinstaller_exe)) {
 
 # Run PyInstaller
 # Note: we use --add-data "frontend/dist;dist" on Windows to copy built frontend assets into the EXE.
-# We keep the console window open to allow users to see logs and easily shut down the app.
+# We use --noconsole to hide the terminal window since we are using pywebview for a native window.
 # We also include --hidden-import for tiktoken extensions which are dynamically loaded at runtime.
-& $pyinstaller_exe --onefile --name="LedgerForensicAudit" --add-data "frontend/dist;dist" --hidden-import="tiktoken_ext" --hidden-import="tiktoken_ext.openai_public" desktop_launcher.py
+& $pyinstaller_exe --onefile --noconsole --name="LedgerForensicAudit" --add-data "frontend/dist;dist" --hidden-import="tiktoken_ext" --hidden-import="tiktoken_ext.openai_public" desktop_launcher.py
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "PyInstaller packaging failed."
@@ -44,3 +44,4 @@ Write-Host "`n==================================================" -ForegroundCol
 Write-Host "SUCCESS: Application packaged successfully!" -ForegroundColor Green
 Write-Host "Executable location: .\dist\LedgerForensicAudit.exe" -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Green
+

@@ -3,8 +3,8 @@ import sys
 import socket
 import threading
 import time
-import webbrowser
 import uvicorn
+import webview
 
 # Change current working directory to the executable folder if packaged.
 # This ensures SQLite database, uploads, and config.json are persistent on user's disk.
@@ -35,8 +35,13 @@ def wait_for_server(port: int, timeout: float = 15.0):
     return False
 
 
+server_instance = None
+
 def start_backend(port: int):
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    global server_instance
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server_instance = uvicorn.Server(config)
+    server_instance.run()
 
 
 if __name__ == '__main__':
@@ -46,11 +51,26 @@ if __name__ == '__main__':
     backend_thread = threading.Thread(target=start_backend, args=(port,), daemon=True)
     backend_thread.start()
 
-    # Wait until the server is ready, then open the default browser
+    # Wait until the server is ready, then open the pywebview window
     if wait_for_server(port):
-        webbrowser.open(f"http://127.0.0.1:{port}")
+        # Create a native window frame loading our local server url
+        webview.create_window(
+            title="Ledger Forensic Audit",
+            url=f"http://127.0.0.1:{port}",
+            width=1280,
+            height=800,
+            min_size=(1024, 768)
+        )
+        # Block main thread until the webview window is closed
+        webview.start()
+        # Trigger graceful shutdown on uvicorn
+        if server_instance:
+            server_instance.should_exit = True
+        time.sleep(0.5)
+        # Forcefully terminate the entire process
+        os._exit(0)
     else:
-        print(f"[Warning] Server did not start on port {port} within 15s. Try opening manually.")
+        print(f"[Error] FastAPI backend did not start on port {port} within 15s.")
+        sys.exit(1)
 
-    # Keep the process alive (daemon thread dies with the main thread)
-    backend_thread.join()
+

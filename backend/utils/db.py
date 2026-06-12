@@ -21,6 +21,13 @@ class AuditRecord(Base):
     extra_files_json = Column(Text, nullable=True)   # JSON list of {file_path, ledger_type}
     audit_type = Column(String, default="general_ledger") # general_ledger, bank_statement, creditors
 
+class SystemSetting(Base):
+    __tablename__ = 'settings'
+    
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)
+
+
 # Create SQLite engine and session factory
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

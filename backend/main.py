@@ -51,6 +51,22 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+def update_audit_status(audit_id: str, status: str, results_json: Optional[str] = None):
+    """Safe utility to update audit status in background thread with rollback protection."""
+    db = SessionLocal()
+    try:
+        record = db.query(AuditRecord).filter(AuditRecord.id == audit_id).first()
+        if record:
+            record.status = status
+            if results_json is not None:
+                record.results_json = results_json
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[DB Error] Failed to update audit status to {status}: {e}")
+    finally:
+        db.close()
+
 @app.on_event("startup")
 def startup_event():
     # Initialize the local SQLite database
@@ -91,7 +107,11 @@ def upload_file(
         status="queued"
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database commit failed: {str(e)}")
     
     return {"audit_id": audit_id, "filename": filename}
 
@@ -132,7 +152,11 @@ async def attach_file(
     existing = [e for e in existing if e.get("ledger_type") != ledger_type]
     existing.append({"file_path": dest, "ledger_type": ledger_type})
     record.extra_files_json = json.dumps(existing)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database commit failed: {str(e)}")
 
     return {"status": "attached", "ledger_type": ledger_type, "file_path": dest}
 
@@ -153,8 +177,12 @@ async def stream_audit(
     if not record:
         raise HTTPException(status_code=404, detail="Audit session not found.")
         
-    record.status = "running"
-    db.commit()
+    try:
+        record.status = "running"
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to set status to running: {str(e)}")
     
     # Eagerly capture values from the model before Session is detached/closed
     file_path = record.file_path
@@ -267,11 +295,7 @@ async def stream_audit(
                 return super().default(obj)
 
         if error_msg:
-            with SessionLocal() as bg_db:
-                bg_record = bg_db.query(AuditRecord).filter(AuditRecord.id == audit_id).first()
-                if bg_record:
-                    bg_record.status = "failed"
-                    bg_db.commit()
+            update_audit_status(audit_id, "failed")
             yield f"data: {json.dumps({'agent': 'Orchestrator', 'status': 'failed', 'progress_pct': 100, 'finding_count': 0, 'error': error_msg})}\n\n"
             return
 
@@ -293,20 +317,12 @@ async def stream_audit(
                 "memo": final_state["memo"].model_dump() if final_state.get("memo") else None,
                 "excel_report_path": final_state.get("excel_report_path")
             }
-            with SessionLocal() as bg_db:
-                bg_record = bg_db.query(AuditRecord).filter(AuditRecord.id == audit_id).first()
-                if bg_record:
-                    bg_record.status = "completed"
-                    bg_record.results_json = json.dumps(results, cls=CustomEncoder)
-                    bg_db.commit()
+            results_str = json.dumps(results, cls=CustomEncoder)
+            update_audit_status(audit_id, "completed", results_json=results_str)
             yield f"data: {json.dumps({'agent': 'Orchestrator', 'status': 'completed', 'progress_pct': 100, 'finding_count': 0})}\n\n"
         else:
             err = (final_state or {}).get("error_summary", "Unknown error") if final_state else "Graph returned no state"
-            with SessionLocal() as bg_db:
-                bg_record = bg_db.query(AuditRecord).filter(AuditRecord.id == audit_id).first()
-                if bg_record:
-                    bg_record.status = "failed"
-                    bg_db.commit()
+            update_audit_status(audit_id, "failed")
             yield f"data: {json.dumps({'agent': 'Orchestrator', 'status': 'failed', 'progress_pct': 100, 'finding_count': 0, 'error': err})}\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
@@ -579,6 +595,7 @@ def analyze_bank_statement_endpoint(
         
         return results
     except Exception as e:
+        db.rollback()
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Bank statement analysis failed: {str(e)}")
@@ -684,6 +701,7 @@ def analyze_creditors_endpoint(
         return results
         
     except Exception as e:
+        db.rollback()
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Creditors analysis failed: {str(e)}")

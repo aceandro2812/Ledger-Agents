@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useSSE() {
   const [statusLogs, setStatusLogs] = useState([]);
@@ -8,7 +8,23 @@ export function useSSE() {
   const [isFailed, setIsFailed] = useState(false);
   const [error, setError] = useState(null);
 
+  const eventSourceRef = useRef(null);
+
+  // Close EventSource on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
+
   const startAudit = useCallback((auditId, config = {}) => {
+    // Close existing EventSource if open
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
     // Reset state
     setStatusLogs([]);
     setProgress(0);
@@ -36,6 +52,7 @@ export function useSSE() {
     const backendUrl = import.meta.env.VITE_API_URL || (window.location.port === '5173' ? 'http://localhost:8000' : '');
     const sseUrl = `${backendUrl}/audit/${auditId}/stream?${params.toString()}`;
     const eventSource = new EventSource(sseUrl);
+    eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
       try {

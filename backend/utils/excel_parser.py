@@ -98,12 +98,15 @@ def parse_excel_file(file_path: str) -> Dict[str, List[RawRow]]:
     """
     # read_only=False is required to access merged_cells; data_only=True skips formulas.
     wb = openpyxl.load_workbook(file_path, data_only=True, read_only=False)
-    results = {}
-    for sheet_name in wb.sheetnames:
-        sheet = wb[sheet_name]
-        results[sheet_name] = parse_excel_sheet(sheet)
-    wb.close()
-    return results
+    try:
+        results = {}
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            results[sheet_name] = parse_excel_sheet(sheet)
+        return results
+    finally:
+        wb.close()
+
 
 def parse_csv_file(file_path: str, encoding: str = 'utf-8-sig') -> List[RawRow]:
     """

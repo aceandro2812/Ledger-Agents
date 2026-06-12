@@ -19,26 +19,93 @@ def get_config_path() -> str:
     return os.path.join(base_dir, "forensic_audit_config.json")
 
 
+def get_db_setting(key: str) -> Optional[str]:
+    """Query a setting directly from the SQLite database."""
+    import sqlite3
+    db_path = "forensic_audit.db"
+    if getattr(sys, 'frozen', False):
+        db_path = os.path.join(os.path.dirname(sys.executable), db_path)
+    
+    if not os.path.exists(db_path):
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return row[0]
+    except Exception:
+        pass
+    return None
+
+
+def set_db_setting(key: str, value: str) -> None:
+    """Insert or update a setting directly in the SQLite database."""
+    import sqlite3
+    db_path = "forensic_audit.db"
+    if getattr(sys, 'frozen', False):
+        db_path = os.path.join(os.path.dirname(sys.executable), db_path)
+        
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Warning] Failed to write db setting {key}: {e}")
+
+
 def read_config() -> dict:
-    """Read configuration from config.json. Returns empty dict if not found."""
+    """Read configuration from config.json and merge with database settings."""
     path = get_config_path()
+    cfg = {}
+    
+    # 1. Read from config.json if it exists
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                cfg = json.load(f)
         except Exception:
-            return {}
-    return {}
+            cfg = {}
+            
+    # 2. Merge database settings (database values override config file)
+    db_api_key = get_db_setting("llm_api_key")
+    db_model = get_db_setting("llm_model")
+    db_base_url = get_db_setting("llm_base_url")
+    
+    if db_api_key is not None:
+        cfg["llm_api_key"] = db_api_key
+    if db_model is not None:
+        cfg["llm_model"] = db_model
+    if db_base_url is not None:
+        cfg["llm_base_url"] = db_base_url
+        
+    return cfg
 
 
 def write_config(data: dict) -> None:
-    """Write configuration dict to config.json."""
+    """Write configuration dict to config.json and SQLite database."""
+    # Write to database settings
+    if "llm_api_key" in data:
+        set_db_setting("llm_api_key", data["llm_api_key"])
+    if "llm_model" in data:
+        set_db_setting("llm_model", data["llm_model"])
+    if "llm_base_url" in data:
+        set_db_setting("llm_base_url", data["llm_base_url"])
+
     path = get_config_path()
-    # Merge with existing config to avoid overwriting unrelated keys
     existing = read_config()
     existing.update(data)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(existing, f, indent=2)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to write config file: {e}")
+
 
 
 def is_llm_configured() -> bool:

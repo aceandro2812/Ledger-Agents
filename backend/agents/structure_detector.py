@@ -239,13 +239,86 @@ def detect_structure(rows: List[RawRow], llm_client: Optional[LLMClient] = None)
             # If LLM fails, fallback to heuristic schema even if low confidence
             if schema_map:
                 return schema_map
-            raise
             
     # Default fallback if no LLM and heuristics failed/low-confidence
     if schema_map:
         return schema_map
         
-    raise ValueError(
-        "Could not detect structure of the ledger dump. "
-        "No clear header row or columns found (Date/Particulars/Debit/Credit)."
+    # If we got here, schema_map is None. Build a smart fallback instead of raising ValueError.
+    fallback_header_row_idx = 1
+    for r in rows:
+        non_empty = [c for c in r.cells if c is not None and str(c).strip() != ""]
+        if len(non_empty) >= 3:
+            fallback_header_row_idx = r.row_idx
+            break
+
+    # Try to map columns by checking their values in the rows after fallback_header_row_idx
+    num_cols = max(len(r.cells) for r in rows) if rows else 0
+    date_col = None
+    debit_col = None
+    credit_col = None
+    narration_col = None
+    balance_col = None
+    voucher_col = None
+    
+    col_types = {i: [] for i in range(num_cols)}
+    for r in rows[fallback_header_row_idx:fallback_header_row_idx + 30]:
+        for i, cell in enumerate(r.cells):
+            if cell is not None and str(cell).strip() != "":
+                val_str = str(cell).strip()
+                if parse_date(val_str) is not None:
+                    col_types[i].append("date")
+                else:
+                    try:
+                        cleaned = re.sub(r"[^\d\.\-\(\)]", "", val_str)
+                        if cleaned.startswith("(") and cleaned.endswith(")"):
+                            cleaned = "-" + cleaned[1:-1]
+                        float(cleaned)
+                        col_types[i].append("number")
+                    except ValueError:
+                        col_types[i].append("string")
+
+    for i in range(num_cols):
+        votes = col_types[i]
+        if not votes:
+            continue
+        most_common = max(set(votes), key=votes.count)
+        if most_common == "date" and date_col is None:
+            date_col = i
+        elif most_common == "number":
+            if debit_col is None:
+                debit_col = i
+            elif credit_col is None:
+                credit_col = i
+            elif balance_col is None:
+                balance_col = i
+        elif most_common == "string":
+            if narration_col is None:
+                narration_col = i
+            elif voucher_col is None:
+                voucher_col = i
+
+    if date_col is None:
+        date_col = 0
+    if narration_col is None:
+        narration_col = 1
+    if debit_col is None:
+        debit_col = 2
+    if credit_col is None:
+        credit_col = 3 if num_cols > 3 else 2
+        
+    fallback_map = SchemaMap(
+        party_source="row_header",
+        party_col_idx=None,
+        party_row_pattern="Ledger:|Account of:|Party:",
+        date_col_idx=date_col,
+        voucher_col_idx=voucher_col,
+        debit_col_idx=debit_col,
+        credit_col_idx=credit_col,
+        balance_col_idx=balance_col,
+        narration_col_idx=narration_col,
+        date_format="%d-%m-%Y",
+        header_row_idx=fallback_header_row_idx,
+        data_start_row_idx=fallback_header_row_idx + 1
     )
+    return fallback_map

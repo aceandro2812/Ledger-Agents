@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Info } from 'lucide-react';
+import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Info, Loader2 } from 'lucide-react';
 
 // Creditors ledger has its own dedicated upload zone — NOT in this generic list
 const LEDGER_TYPES = [
@@ -105,15 +105,23 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
   const [pastAudits, setPastAudits] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   const backendUrl = import.meta.env.VITE_API_URL || (window.location.port === '5173' ? 'http://localhost:8000' : '');
 
   // Fetch past audits
   useEffect(() => {
+    setLoadingHistory(true);
     fetch(`${backendUrl}/audits`)
       .then((res) => res.json())
-      .then((data) => setPastAudits(data))
-      .catch((err) => console.error('Failed to load past audits', err));
+      .then((data) => {
+        setPastAudits(data);
+        setLoadingHistory(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load past audits', err);
+        setLoadingHistory(false);
+      });
   }, []);
 
   const onDrop = async (acceptedFiles) => {
@@ -172,6 +180,8 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
   const removeHoliday = (dateToRemove) => {
     setHolidays(holidays.filter((h) => h !== dateToRemove));
   };
+
+  const glPastAudits = pastAudits.filter(a => a.audit_type !== 'bank_statement' && a.audit_type !== 'creditors');
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -288,36 +298,47 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
         {/* Upload Zone Column */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Drag & Drop */}
-          <div
-            {...getRootProps()}
-            className={`flex-1 min-h-[300px] border-2 border-dashed rounded-2xl p-10 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
-              isDragActive
-                ? 'border-blue-500 bg-blue-950/20'
-                : 'border-dark-600 bg-dark-800 hover:border-dark-500 hover:bg-dark-800/80'
-            }`}
-          >
-            <input {...getInputProps()} />
-            <div className="p-4 bg-dark-700 rounded-full text-blue-400 mb-4 shadow-inner">
-              <FileUp className="w-10 h-10 animate-pulse" />
+          {uploading ? (
+            <div className="flex-1 min-h-[300px] border border-dark-700 bg-dark-800 rounded-2xl p-10 flex flex-col justify-center items-center shadow-xl">
+              <div className="p-4 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-2xl mb-4">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
+              </div>
+              <div className="text-center max-w-sm">
+                <h3 className="text-lg font-bold text-white mb-1.5">Ingesting Ledger Spreadsheet...</h3>
+                <p className="text-sm text-gray-400">
+                  Please wait while our forensic ingestion agent cleans, structures, and validates the transaction rows locally.
+                </p>
+                <div className="w-48 bg-dark-900 h-1.5 rounded-full mt-5 mx-auto overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full animate-pulse w-full" />
+                </div>
+              </div>
             </div>
-            
-            {uploading ? (
-              <div className="text-center">
-                <p className="text-lg font-bold text-white mb-2">Ingesting spreadsheet...</p>
-                <p className="text-sm text-gray-400">Verifying file structure & columns</p>
+          ) : (
+            <div
+              {...getRootProps()}
+              className={`flex-1 min-h-[300px] border-2 border-dashed rounded-2xl p-10 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
+                isDragActive
+                  ? 'border-blue-500 bg-blue-950/20'
+                  : 'border-dark-600 bg-dark-800 hover:border-dark-500 hover:bg-dark-800/80'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <div className="p-4 bg-dark-700 rounded-full text-blue-400 mb-4 shadow-inner">
+                <FileUp className="w-10 h-10 animate-pulse" />
               </div>
-            ) : isDragActive ? (
-              <p className="text-lg font-bold text-blue-400">Drop ledger file here...</p>
-            ) : (
-              <div className="text-center">
-                <p className="text-lg font-bold text-white mb-2">Drag & Drop ledger dump here</p>
-                <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
-                <span className="bg-dark-700 border border-dark-600 text-blue-400 hover:bg-dark-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
-                  Select File From Computer
-                </span>
-              </div>
-            )}
-          </div>
+              {isDragActive ? (
+                <p className="text-lg font-bold text-blue-400">Drop ledger file here...</p>
+              ) : (
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white mb-2">Drag & Drop ledger dump here</p>
+                  <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
+                  <span className="bg-dark-700 border border-dark-600 text-blue-400 hover:bg-dark-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+                    Select File From Computer
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -385,11 +406,16 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
               Local Audit History
             </h3>
             
-            {pastAudits.length === 0 ? (
+            {loadingHistory ? (
+              <div className="flex justify-center items-center py-6 gap-2 text-sm text-gray-500">
+                <Loader2 className="w-4.5 h-4.5 animate-spin text-gray-450" />
+                <span>Loading history...</span>
+              </div>
+            ) : glPastAudits.length === 0 ? (
               <p className="text-sm text-gray-500 italic">No historical audits run on this machine.</p>
             ) : (
               <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                {pastAudits.map((a) => (
+                {glPastAudits.map((a) => (
                   <div
                     key={a.id}
                     onClick={() => a.status === 'completed' && onLoadPastAudit(a.id)}
@@ -404,18 +430,8 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
                         <h4 className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-xs" title={a.filename}>
                           {a.filename}
                         </h4>
-                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                          a.audit_type === 'bank_statement'
-                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                            : a.audit_type === 'creditors'
-                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                            : 'bg-dark-750 text-gray-400 border-dark-650'
-                        }`}>
-                          {a.audit_type === 'bank_statement'
-                            ? 'BANK STATEMENT'
-                            : a.audit_type === 'creditors'
-                            ? 'CREDITORS AP'
-                            : 'GENERAL LEDGER'}
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded border whitespace-nowrap bg-blue-500/10 text-blue-400 border-blue-500/20">
+                          GENERAL LEDGER
                         </span>
                       </div>
                       <span className="text-xs text-gray-500 block">

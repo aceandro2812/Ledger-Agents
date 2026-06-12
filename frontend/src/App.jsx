@@ -113,6 +113,7 @@ export default function App() {
   const handleBackToUpload = () => {
     setGlAuditId(null);
     setGlResults(null);
+    setGlPage('results');
     setGlTab('upload');
   };
 
@@ -212,18 +213,19 @@ export default function App() {
           </button>
         )}
 
-        {/* GL: active file indicator + New GL Audit button */}
-        {appMode === 'gl' && glResults && glPage === 'results' && (
+        {appMode === 'gl' && (glPage === 'results' || glPage === 'audit' || glPage === 'loading') && (
           <>
-            <span className="text-xs text-gray-400 font-medium bg-dark-800 border border-dark-700 px-3.5 py-1.5 rounded-lg truncate max-w-[240px]">
-              Active: <strong>{glFilename}</strong>
-            </span>
+            {glFilename && glPage === 'results' && (
+              <span className="text-xs text-gray-400 font-medium bg-dark-800 border border-dark-700 px-3.5 py-1.5 rounded-lg truncate max-w-[240px]">
+                Active: <strong>{glFilename}</strong>
+              </span>
+            )}
             <button
               onClick={handleBackToUpload}
               className="text-xs font-bold text-gray-400 hover:text-white transition-colors bg-dark-800 hover:bg-dark-700 border border-dark-700 px-3.5 py-1.5 rounded-lg flex items-center gap-1"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
-              New GL Audit
+              {glPage === 'audit' || glPage === 'loading' ? 'Cancel Audit' : 'New GL Audit'}
             </button>
           </>
         )}

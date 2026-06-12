@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   CreditCard, RefreshCw, FileDown, Upload, 
-  Search, Filter, ArrowUpRight, ArrowDownLeft, Info
+  Search, Filter, ArrowUpRight, ArrowDownLeft, Info, Loader2,
+  History, Play
 } from 'lucide-react';
 
 function fmt(val, sym = 'Rs.') {
@@ -45,6 +46,10 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedType, setSelectedType] = useState('All'); // 'All' | 'Debit' | 'Credit'
 
+  // History States
+  const [pastAudits, setPastAudits] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
   // Derive activeData functionally to avoid setting state inside an effect (avoids set-state-in-effect)
   let activeData = null;
   if (recon) {
@@ -84,6 +89,40 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
   } else {
     activeData = directAnalysis;
   }
+
+  useEffect(() => {
+    if (!recon && !activeData) {
+      setLoadingHistory(true);
+      fetch(`${backendUrl}/audits`)
+        .then((res) => res.json())
+        .then((data) => {
+          setPastAudits(data.filter((a) => a.audit_type === 'bank_statement'));
+          setLoadingHistory(false);
+        })
+        .catch((err) => {
+          console.error('Failed to load past audits', err);
+          setLoadingHistory(false);
+        });
+    }
+  }, [recon, directAnalysis, results, backendUrl]);
+
+  const handleLoadPastAudit = async (auditId) => {
+    setLoadingHistory(true);
+    setError(null);
+    try {
+      const res = await fetch(`${backendUrl}/audit/${auditId}`);
+      if (!res.ok) {
+        throw new Error('Failed to load past audit');
+      }
+      const data = await res.json();
+      setDirectAnalysis(data.results);
+      setSubTab('categorization');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const onDrop = async (acceptedFiles) => {
     if (acceptedFiles.length === 0) return;
@@ -131,7 +170,7 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
     // Process filtered transactions
     const allTxns = activeData.transactions;
     const txnsToDownload = allTxns.filter(t => {
-      const matchesSearch = t.narration.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = (t.narration || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (t.ref_no && t.ref_no.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = selectedCategory === 'All' || t.category === selectedCategory;
       const matchesType = selectedType === 'All' || 
@@ -153,7 +192,7 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
     const headers = ['Date', 'Narration', 'Category', 'Debit (Withdrawal)', 'Credit (Deposit)', 'Balance', 'Bank Name'];
     const rows = txnsToDownload.map(t => [
       t.date,
-      `"${t.narration.replace(/"/g, '""')}"`,
+      `"${(t.narration || '').replace(/"/g, '""')}"`,
       t.category,
       t.debit || 0,
       t.credit || 0,
@@ -204,36 +243,47 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
           </p>
         </div>
 
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-16 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
-            isDragActive
-              ? 'border-blue-500 bg-blue-950/20'
-              : 'border-dark-600 bg-dark-800 hover:border-dark-500 hover:bg-dark-800/80'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <div className="p-4 bg-dark-700 rounded-full text-blue-400 mb-4 shadow-inner">
-            <Upload className="w-10 h-10 animate-bounce" />
+        {uploading ? (
+          <div className="border border-dark-700 bg-dark-800 rounded-2xl p-16 flex flex-col justify-center items-center shadow-xl">
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl mb-4">
+              <Loader2 className="w-10 h-10 animate-spin text-emerald-400" />
+            </div>
+            <div className="text-center max-w-sm">
+              <h3 className="text-lg font-bold text-white mb-1.5">Analyzing Bank Statement...</h3>
+              <p className="text-sm text-gray-400">
+                Parsing transaction layout, running category classification models, and reconciling cash flows locally.
+              </p>
+              <div className="w-48 bg-dark-900 h-1.5 rounded-full mt-5 mx-auto overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full animate-pulse w-full" />
+              </div>
+            </div>
           </div>
-          
-          {uploading ? (
-            <div className="text-center">
-              <p className="text-lg font-bold text-white mb-2">Analyzing bank statement...</p>
-              <p className="text-sm text-gray-400">Parsing structure & running categorization engine</p>
+        ) : (
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-2xl p-16 flex flex-col justify-center items-center cursor-pointer transition-all duration-300 ${
+              isDragActive
+                ? 'border-blue-500 bg-blue-950/20'
+                : 'border-dark-600 bg-dark-800 hover:border-dark-500 hover:bg-dark-800/80'
+            }`}
+          >
+            <input {...getInputProps()} />
+            <div className="p-4 bg-dark-700 rounded-full text-blue-400 mb-4 shadow-inner">
+              <Upload className="w-10 h-10 animate-bounce" />
             </div>
-          ) : isDragActive ? (
-            <p className="text-lg font-bold text-blue-400">Drop statement here...</p>
-          ) : (
-            <div className="text-center">
-              <p className="text-lg font-bold text-white mb-2">Drag & Drop bank statement here</p>
-              <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
-              <span className="bg-dark-700 border border-dark-600 text-blue-400 hover:bg-dark-600 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
-                Select Statement File
-              </span>
-            </div>
-          )}
-        </div>
+            {isDragActive ? (
+              <p className="text-lg font-bold text-blue-400">Drop statement here...</p>
+            ) : (
+              <div className="text-center">
+                <p className="text-lg font-bold text-white mb-2">Drag & Drop bank statement here</p>
+                <p className="text-sm text-gray-400 mb-6">Supports .xlsx, .xlsm, or .csv formats</p>
+                <span className="bg-dark-700 border border-dark-600 text-blue-400 hover:bg-dark-600 text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
+                  Select Statement File
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-950/30 border border-red-500/50 rounded-xl p-4 flex gap-3 text-red-300">
@@ -244,6 +294,66 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
             </div>
           </div>
         )}
+
+        {/* Audit History Card */}
+        <div className="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl mt-6">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <History className="w-5 h-5 text-gray-400" />
+            Local Bank Statement History
+          </h3>
+          
+          {loadingHistory ? (
+            <div className="flex justify-center items-center py-6 gap-2 text-sm text-gray-500">
+              <Loader2 className="w-4.5 h-4.5 animate-spin text-emerald-400" />
+              <span>Loading history...</span>
+            </div>
+          ) : pastAudits.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">No historical bank statements analyzed on this machine.</p>
+          ) : (
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+              {pastAudits.map((a) => (
+                <div
+                  key={a.id}
+                  onClick={() => a.status === 'completed' && handleLoadPastAudit(a.id)}
+                  className={`flex items-center justify-between p-3.5 bg-dark-900 border rounded-xl transition-all ${
+                    a.status === 'completed' 
+                      ? 'border-dark-600 cursor-pointer hover:border-emerald-500 hover:bg-dark-900/60' 
+                      : 'border-red-900/50 opacity-60'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0 pr-4 text-left">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-xs" title={a.filename}>
+                        {a.filename}
+                      </h4>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded border whitespace-nowrap bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                        BANK STATEMENT
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500 block">
+                      {new Date(a.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                      a.status === 'completed'
+                        ? 'bg-green-950/40 text-green-400 border border-green-800/40'
+                        : a.status === 'failed'
+                        ? 'bg-red-950/40 text-red-400 border border-red-800/40'
+                        : 'bg-yellow-950/40 text-yellow-400 border border-yellow-800/40'
+                    }`}>
+                      {a.status.toUpperCase()}
+                    </span>
+                    {a.status === 'completed' && (
+                      <Play className="w-4 h-4 text-emerald-400 hover:text-emerald-300" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -257,7 +367,7 @@ export default function BankReconciliation({ results, currencySymbol = 'Rs.' }) 
   // Process direct analysis transactions for filtering
   const allTxns = activeData?.transactions || [];
   const filteredTxns = allTxns.filter(t => {
-    const matchesSearch = t.narration.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = (t.narration || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (t.ref_no && t.ref_no.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || t.category === selectedCategory;
     const matchesType = selectedType === 'All' || 
