@@ -614,30 +614,37 @@ def analyze_creditors_endpoint(
         from backend.agents.structure_detector import detect_structure
         from backend.agents.ingestion import ingest_transactions
         from backend.agents.aging_fifo import calculate_aging_fifo
-        from backend.utils.llm import LLMClient
         from backend.models.schema import PartyAgingSummary
+        import json
         
         # 1. Parse spreadsheet rows
+        print(f"[Creditors] Parsing file: {local_path}")
         sheets = parse_file(local_path)
         if not sheets:
             raise HTTPException(status_code=400, detail="The uploaded spreadsheet contains no worksheets.")
         sheet_name = list(sheets.keys())[0]
         rows = sheets[sheet_name]
+        print(f"[Creditors] Parsed {len(rows)} rows from sheet '{sheet_name}'")
         
-        # 2. Detect schema
-        llm = LLMClient()
-        schema_map = detect_structure(rows, llm_client=llm)
+        # 2. Detect schema — heuristics only, NO LLM to avoid blocking
+        print("[Creditors] Running structure detection (heuristics only)...")
+        schema_map = detect_structure(rows, llm_client=None)
+        print(f"[Creditors] Schema detected: header_row={schema_map.header_row_idx}, date_col={schema_map.date_col_idx}, debit_col={schema_map.debit_col_idx}, credit_col={schema_map.credit_col_idx}")
         
         # 3. Ingest transactions
+        print("[Creditors] Ingesting transactions...")
         txns = ingest_transactions(rows, schema_map)
+        print(f"[Creditors] Ingested {len(txns)} transactions")
         
         # 4. Calculate aging
         as_on_dt = None
         if as_on_date:
             from backend.utils.date_utils import parse_date
             as_on_dt = parse_date(as_on_date)
-            
+        
+        print("[Creditors] Running FIFO aging calculation...")
         aging_res = calculate_aging_fifo(txns, as_on_dt)
+        print(f"[Creditors] Aging complete: {len(aging_res)} parties")
         
         # Force is_creditor = True for the results since this is a creditors ledger
         aging_dict_list = []
@@ -652,19 +659,27 @@ def analyze_creditors_endpoint(
             "audit_type": "creditors"
         }
         
-        # Save to database
+        # Save to database — use CustomEncoder for Decimal/date serialization
+        class _CredEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (dt.date, dt.datetime)):
+                    return obj.isoformat()
+                if isinstance(obj, Decimal):
+                    return float(obj)
+                return super().default(obj)
+
         from backend.utils.db import AuditRecord
-        import json
         record = AuditRecord(
             id=audit_id,
             filename=filename,
             file_path=local_path,
             status="completed",
-            results_json=json.dumps(results),
+            results_json=json.dumps(results, cls=_CredEncoder),
             audit_type="creditors"
         )
         db.add(record)
         db.commit()
+        print(f"[Creditors] Done. Audit saved with id={audit_id}")
         
         return results
         
