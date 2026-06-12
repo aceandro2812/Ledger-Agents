@@ -230,12 +230,12 @@ class BankTransaction(BaseModel):
     """Single row from a bank statement (any supported bank format)."""
     row_idx: int
     date: dt.date
-    narration: str
-    debit: Decimal = Field(default=Decimal("0.00"))
-    credit: Decimal = Field(default=Decimal("0.00"))
+    narration: Optional[str] = ""
+    debit: Optional[Decimal] = Field(default=Decimal("0.00"))
+    credit: Optional[Decimal] = Field(default=Decimal("0.00"))
     balance: Optional[Decimal] = None
     ref_no: Optional[str] = None
-    bank_name: str = ""
+    bank_name: Optional[str] = ""
     category: Optional[str] = "Uncategorized"
 
 class BankReconciliationItem(BaseModel):

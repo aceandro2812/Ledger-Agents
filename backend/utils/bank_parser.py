@@ -50,17 +50,36 @@ BANK_SIGNATURES: List[Tuple[str, List[str]]] = [
 ]
 
 
-def _clean_amount(val: str) -> Decimal:
+def _clean_amount(val: Optional[str]) -> Decimal:
     """Strip currency symbols, commas and convert to Decimal. Returns 0 on failure."""
     if not val:
         return Decimal("0.00")
-    cleaned = val.strip().replace(",", "").replace("Rs.", "").replace("INR", "").replace(" ", "")
+    cleaned = str(val).strip().replace(",", "").replace("Rs.", "").replace("INR", "").replace(" ", "")
     if cleaned in ("", "-", "N/A", "nil", "Nil"):
         return Decimal("0.00")
     try:
         return Decimal(cleaned)
     except InvalidOperation:
         return Decimal("0.00")
+
+
+def _safe_str(row: Dict, col: Optional[str]) -> str:
+    if not col:
+        return ""
+    val = row.get(col)
+    if val is None:
+        return ""
+    return str(val).strip()
+
+
+def _safe_ref(row: Dict, col: Optional[str]) -> Optional[str]:
+    if not col:
+        return None
+    val = row.get(col)
+    if val is None:
+        return None
+    cleaned = str(val).strip()
+    return cleaned if cleaned else None
 
 
 def _detect_bank(headers: List[str]) -> str:
@@ -75,7 +94,7 @@ def _detect_bank(headers: List[str]) -> str:
 def _parse_hdfc(rows: List[Dict], file_name: str) -> List[BankTransaction]:
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = row.get("Date", "").strip()
+        raw_date = _safe_str(row, "Date")
         if not raw_date:
             continue
         try:
@@ -85,11 +104,11 @@ def _parse_hdfc(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get("Narration", "").strip(),
-            debit=_clean_amount(row.get("Debit Amount", "")),
-            credit=_clean_amount(row.get("Credit Amount", "")),
-            balance=_clean_amount(row.get("Closing Balance", "")) or None,
-            ref_no=row.get("Chq/Ref Number", "").strip() or None,
+            narration=_safe_str(row, "Narration"),
+            debit=_clean_amount(row.get("Debit Amount")),
+            credit=_clean_amount(row.get("Credit Amount")),
+            balance=_clean_amount(row.get("Closing Balance")) or None,
+            ref_no=_safe_ref(row, "Chq/Ref Number"),
             bank_name="HDFC",
         ))
     return txns
@@ -98,7 +117,7 @@ def _parse_hdfc(rows: List[Dict], file_name: str) -> List[BankTransaction]:
 def _parse_sbi(rows: List[Dict], file_name: str) -> List[BankTransaction]:
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = row.get("Txn Date", "").strip()
+        raw_date = _safe_str(row, "Txn Date")
         if not raw_date:
             continue
         try:
@@ -108,11 +127,11 @@ def _parse_sbi(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get("Description", "").strip(),
-            debit=_clean_amount(row.get("Debit", "")),
-            credit=_clean_amount(row.get("Credit", "")),
-            balance=_clean_amount(row.get("Balance", "")) or None,
-            ref_no=row.get("Ref No./Cheque No.", "").strip() or None,
+            narration=_safe_str(row, "Description"),
+            debit=_clean_amount(row.get("Debit")),
+            credit=_clean_amount(row.get("Credit")),
+            balance=_clean_amount(row.get("Balance")) or None,
+            ref_no=_safe_ref(row, "Ref No./Cheque No."),
             bank_name="SBI",
         ))
     return txns
@@ -121,7 +140,7 @@ def _parse_sbi(rows: List[Dict], file_name: str) -> List[BankTransaction]:
 def _parse_icici(rows: List[Dict], file_name: str) -> List[BankTransaction]:
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = (row.get("Transaction Date") or row.get("Value Date", "")).strip()
+        raw_date = (_safe_str(row, "Transaction Date") or _safe_str(row, "Value Date"))
         if not raw_date:
             continue
         try:
@@ -134,11 +153,11 @@ def _parse_icici(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get("Transaction Remarks", "").strip(),
-            debit=_clean_amount(row.get(debit_key, "")) if debit_key else Decimal("0.00"),
-            credit=_clean_amount(row.get(credit_key, "")) if credit_key else Decimal("0.00"),
-            balance=_clean_amount(row.get(bal_key, "")) if bal_key else None,
-            ref_no=row.get("Cheque Number", "").strip() or None,
+            narration=_safe_str(row, "Transaction Remarks"),
+            debit=_clean_amount(row.get(debit_key)) if debit_key else Decimal("0.00"),
+            credit=_clean_amount(row.get(credit_key)) if credit_key else Decimal("0.00"),
+            balance=_clean_amount(row.get(bal_key)) if bal_key else None,
+            ref_no=_safe_ref(row, "Cheque Number"),
             bank_name="ICICI",
         ))
     return txns
@@ -147,7 +166,7 @@ def _parse_icici(rows: List[Dict], file_name: str) -> List[BankTransaction]:
 def _parse_axis(rows: List[Dict], file_name: str) -> List[BankTransaction]:
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = row.get("Tran Date", "").strip()
+        raw_date = _safe_str(row, "Tran Date")
         if not raw_date:
             continue
         try:
@@ -157,11 +176,11 @@ def _parse_axis(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get("Particulars", "").strip(),
-            debit=_clean_amount(row.get("Debit", "")),
-            credit=_clean_amount(row.get("Credit", "")),
-            balance=_clean_amount(row.get("Balance", "")) or None,
-            ref_no=row.get("CHQNO", "").strip() or None,
+            narration=_safe_str(row, "Particulars"),
+            debit=_clean_amount(row.get("Debit")),
+            credit=_clean_amount(row.get("Credit")),
+            balance=_clean_amount(row.get("Balance")) or None,
+            ref_no=_safe_ref(row, "CHQNO"),
             bank_name="AXIS",
         ))
     return txns
@@ -170,7 +189,7 @@ def _parse_axis(rows: List[Dict], file_name: str) -> List[BankTransaction]:
 def _parse_kotak(rows: List[Dict], file_name: str) -> List[BankTransaction]:
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = row.get("date", "").strip()
+        raw_date = _safe_str(row, "date")
         if not raw_date:
             continue
         try:
@@ -180,11 +199,11 @@ def _parse_kotak(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get("description", "").strip(),
-            debit=_clean_amount(row.get("Debit", "")),
-            credit=_clean_amount(row.get("Credit", "")),
-            balance=_clean_amount(row.get("Balance", "")) or None,
-            ref_no=row.get("Chq/Ref No", "").strip() or None,
+            narration=_safe_str(row, "description"),
+            debit=_clean_amount(row.get("Debit")),
+            credit=_clean_amount(row.get("Credit")),
+            balance=_clean_amount(row.get("Balance")) or None,
+            ref_no=_safe_ref(row, "Chq/Ref No"),
             bank_name="KOTAK",
         ))
     return txns
@@ -204,7 +223,7 @@ def _parse_generic(rows: List[Dict], file_name: str) -> List[BankTransaction]:
 
     txns = []
     for i, row in enumerate(rows, start=2):
-        raw_date = row.get(date_col, "").strip() if date_col else ""
+        raw_date = _safe_str(row, date_col)
         if not raw_date:
             continue
         try:
@@ -214,11 +233,11 @@ def _parse_generic(rows: List[Dict], file_name: str) -> List[BankTransaction]:
         txns.append(BankTransaction(
             row_idx=i,
             date=txn_date,
-            narration=row.get(narr_col, "").strip() if narr_col else "",
-            debit=_clean_amount(row.get(debit_col, "")) if debit_col else Decimal("0.00"),
-            credit=_clean_amount(row.get(credit_col, "")) if credit_col else Decimal("0.00"),
-            balance=_clean_amount(row.get(bal_col, "")) if bal_col else None,
-            ref_no=row.get(ref_col, "").strip() if ref_col else None,
+            narration=_safe_str(row, narr_col),
+            debit=_clean_amount(row.get(debit_col)) if debit_col else Decimal("0.00"),
+            credit=_clean_amount(row.get(credit_col)) if credit_col else Decimal("0.00"),
+            balance=_clean_amount(row.get(bal_col)) if bal_col else None,
+            ref_no=_safe_ref(row, ref_col),
             bank_name="UNKNOWN",
         ))
     return txns
