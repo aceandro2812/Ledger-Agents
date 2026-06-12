@@ -17,7 +17,7 @@ const BUCKET_STYLE = {
   '>365':     'bg-red-700/20 text-red-500 border border-red-700/20',
 };
 
-export default function CreditorsLedger({ results }) {
+export default function CreditorsLedger() {
   const backendUrl = import.meta.env.VITE_API_URL || (window.location.port === '5173' ? 'http://localhost:8000' : '');
 
   // Local state for direct uploads
@@ -30,9 +30,9 @@ export default function CreditorsLedger({ results }) {
   const [sortField, setSortField] = useState('outstanding_abs');
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Determine active aging list
-  const activeAging = directAnalysis?.aging ?? results?.aging ?? [];
-  const currencySymbol = results?.currency_symbol ?? 'Rs.';
+  // Determine active aging list — local state only, never bleeds GL results
+  const activeAging = directAnalysis?.aging ?? [];
+  const currencySymbol = directAnalysis?.currency_symbol ?? 'Rs.';
 
   // Identify creditors: prefer backend is_creditor flag, fall back to heuristic
   const creditors = activeAging.filter((p) => {

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { ShieldAlert, Search, ArrowUpDown, HelpCircle } from 'lucide-react';
 
 export default function Aging({ results, currencySymbol = 'Rs.' }) {
-  const { aging = [] } = results;
+  const rawAging = results?.aging ?? [];
+  // GL mode: show only debtors (AR) — creditors have their own dedicated mode
+  const aging = rawAging.filter((p) => !p.is_creditor);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('amount'); // 'amount' or 'count'
   const [sortField, setSortField] = useState('outstanding_balance');

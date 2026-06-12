@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Users, Info } from 'lucide-react';
+import { FileUp, Calendar, Coins, History, AlertTriangle, Play, Plus, X, Paperclip, CheckCircle2, ChevronRight, Info } from 'lucide-react';
 
 // Creditors ledger has its own dedicated upload zone — NOT in this generic list
 const LEDGER_TYPES = [
@@ -85,71 +85,6 @@ function AttachFileRow({ auditId, backendUrl, onAttached }) {
   );
 }
 
-// ── Dedicated Creditors Ledger upload widget ─────────────────────────────────
-function CreditorFileSection({ auditId, backendUrl, onAttached, alreadyAttached }) {
-  const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | uploading | done | error
-  const [errMsg, setErrMsg] = useState('');
-  const inputRef = useRef();
-
-  const handleAttach = async () => {
-    if (!file) return;
-    setStatus('uploading');
-    setErrMsg('');
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('ledger_type', 'CREDITORS_LEDGER');
-    try {
-      const res = await fetch(`${backendUrl}/audit/${auditId}/attach`, { method: 'POST', body: fd });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.detail || 'Attach failed');
-      }
-      setStatus('done');
-      onAttached('CREDITORS_LEDGER');
-    } catch (e) {
-      setStatus('error');
-      setErrMsg(e.message);
-    }
-  };
-
-  if (alreadyAttached || status === 'done') {
-    return (
-      <div className="flex items-center gap-2 text-green-400 text-sm font-semibold py-1">
-        <CheckCircle2 className="w-4 h-4" />
-        Creditors Ledger attached successfully
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2 items-center">
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xlsx,.xlsm,.csv"
-          className="hidden"
-          onChange={(e) => setFile(e.target.files[0] || null)}
-        />
-        <button
-          onClick={() => inputRef.current.click()}
-          className="flex-1 bg-dark-900 border border-purple-500/30 hover:border-purple-400/60 text-gray-300 hover:text-white text-sm px-3 py-2.5 rounded-lg transition-colors truncate text-left"
-        >
-          {file ? file.name : 'Choose creditors ledger file (.xlsx / .csv)…'}
-        </button>
-        <button
-          onClick={handleAttach}
-          disabled={!file || status === 'uploading'}
-          className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap"
-        >
-          {status === 'uploading' ? 'Attaching…' : 'Attach'}
-        </button>
-      </div>
-      {status === 'error' && <p className="text-xs text-red-400">{errMsg}</p>}
-    </div>
-  );
-}
 
 export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
   const [asOnDate, setAsOnDate] = useState('');
@@ -263,8 +198,8 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
           <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
             <li><strong>Step 1: Set parameters:</strong> Adjust the As-on Date, base currency, and your duplicate transaction lookup window.</li>
             <li><strong>Step 2: Ingest Main GL:</strong> Drag & drop your primary general ledger file into the drag zone.</li>
-            <li><strong>Step 3: Attach supporting data (Recommended):</strong> Attach Creditors or Sales sheets to unlock sub-suite reviews, then click <strong>Start Forensic Audit</strong>.</li>
-            <li><strong>Note:</strong> You can use the **Creditors Ledger** and **Bank Statement** workspaces in the sidebar directly at any time without uploading a General Ledger.</li>
+            <li><strong>Step 3: Attach supporting data (Recommended):</strong> Attach a bank statement, debtors ledger, sales or expense sheets to unlock sub-suite reviews, then click <strong>Start Forensic Audit</strong>.</li>
+            <li><strong>Note:</strong> For Creditors (AP) analysis or Bank Statement analysis, go back to the Home screen and select the dedicated workspace.</li>
           </ul>
         </div>
       </div>
@@ -398,30 +333,6 @@ export default function Upload({ onUploadSuccess, onLoadPastAudit }) {
           {/* Secondary File Attachment Panels */}
           {uploadedAuditId && (
             <div className="flex flex-col gap-4">
-
-              {/* ── Creditors Ledger — dedicated section ── */}
-              <div className="bg-dark-800 border border-purple-500/30 rounded-2xl p-5 shadow-xl">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-xl flex-shrink-0">
-                    <Users className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">
-                      Creditors Ledger
-                      <span className="ml-2 text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">Recommended</span>
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Upload your AP / Purchase ledger (Tally, SAP, Busy) to enable vendor aging, overdue payables, and duplicate vendor payment detection.
-                    </p>
-                  </div>
-                </div>
-                <CreditorFileSection
-                  auditId={uploadedAuditId}
-                  backendUrl={backendUrl}
-                  onAttached={(type) => setAttachedTypes((prev) => [...prev, type])}
-                  alreadyAttached={attachedTypes.includes('CREDITORS_LEDGER')}
-                />
-              </div>
 
               {/* ── Other Additional Files ── */}
               <div className="bg-dark-800 border border-blue-500/20 rounded-2xl p-5 shadow-xl">
